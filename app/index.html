@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天下茶屋 全球智慧結帳系統</title>
+    <!-- Manifest & Icons -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="icon.png">
+    <meta name="theme-color" content="#4a6741">
+
+    <!-- External CSS -->
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- LibSQL SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@libsql/client@0.6.2/dist/index.min.js"></script>
+</head>
+
+<body>
+
+    <nav class="navbar">
+        <div class="nav-brand">🍵 天下茶屋 <span>| 全球結帳系統</span></div>
+        <div class="nav-links">
+            <button onclick="showModal('menuModal')">Menu查詢</button>
+            <button onclick="showModal('storeModal')">門市列表</button>
+            <button onclick="showModal('historyModal'); fetchOrderHistory();">訂單歷史</button>
+            <button onclick="showModal('loginModal')" id="loginStatusBtn">會員登入</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Main Form -->
+        <div>
+            <div class="store-selector-wrapper">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>📍 目前選擇門市 (全球 30 國)</label>
+                    <select id="globalStoreSelect" class="store-select" onchange="changeStore()">
+                        <!-- Stores injected via js/checkout.js -->
+                    </select>
+                </div>
+            </div>
+
+            <div class="card">
+                <div id="weatherBadge" class="weather-badge">
+                    <span id="weatherIcon">🌡️</span>
+                    <span id="weatherText">連線中...</span>
+                    <div id="weatherSpinner" class="weather-spinner"></div>
+                </div>
+                <div style="color: var(--primary); font-size: 1.05rem; margin-bottom: 20px; font-weight: bold; background: #eef5ee; padding: 10px 15px; border-radius: 8px; border-left: 4px solid var(--primary);"
+                    id="greetingTip">
+                    正在為您擷取當地氣溫...
+                </div>
+
+                <div class="info-bar">
+                    <div class="info-item">🏪 狀態: <span class="info-tag" id="storeBusyStatus"
+                            style="background: #ffe0b2; color: #e65100;">讀取中...</span></div>
+                    <div class="info-item">🧋 原料庫存: <span class="info-tag" id="inventoryStatus">珍珠(5) 椰果(15)</span>
+                    </div>
+                </div>
+
+                <h3>1. 飲品選擇</h3>
+                <div class="form-group">
+                    <label>選擇飲品 (Drink)</label>
+                    <select id="product" onchange="validateForm()">
+                        <option value="40" data-name="天下紅茶">天下紅茶 ($40)</option>
+                        <option value="35" data-name="天下綠茶" selected>天下綠茶 ($35)</option>
+                        <option value="55" data-name="特調奶茶">特調奶茶 ($55)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>溫度 (Temperature)</label>
+                    <select id="temperature">
+                        <option value="Ice">全冰</option>
+                        <option value="Less_Ice" selected>微冰</option>
+                        <option value="No_Ice">去冰</option>
+                        <option value="Hot">熱</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>甜度 (Sweetness)</label>
+                    <select id="sweetness">
+                        <option value="Regular">全糖</option>
+                        <option value="Half">半糖</option>
+                        <option value="Less" selected>微糖</option>
+                        <option value="None">無糖</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>配料 (Toppings) +$10/項</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label"><input type="checkbox" id="topping_boba" value="10"
+                                data-name="珍珠"> 珍珠</label>
+                        <label class="checkbox-label"><input type="checkbox" id="topping_jelly" value="10"
+                                data-name="椰果"> 椰果</label>
+                    </div>
+                    <div id="errorMessage" class="error-message">很抱歉，熱飲暫不提供珍珠加購。</div>
+                    <div id="inventoryError" class="error-message">抱歉，所選配料庫存不足。</div>
+                </div>
+                <div class="form-group">
+                    <label>數量 (Quantity)</label>
+                    <input type="number" id="quantity" value="1" min="1">
+                </div>
+
+                <button class="action-btn" id="addToCartBtn" onclick="addToCart()">加入購物車</button>
+            </div>
+
+            <!-- Order History List Preview -->
+            <div class="card" style="margin-top: 20px;">
+                <h3>🕰️ 最近點餐紀錄</h3>
+                <div id="historyList">
+                    <p style="text-align: center; color: #999;">點擊下單後將出現於此</p>
+                </div>
+                <button class="secondary-btn" onclick="fetchOrderHistory()">重新整理紀錄</button>
+            </div>
+        </div>
+
+        <!-- Right Column: Cart Summary -->
+        <div>
+            <div class="card">
+                <h3 style="margin-top: 0; border-bottom: 2px solid var(--primary); padding-bottom: 10px;">購物車 (Cart)
+                </h3>
+                <div id="cartContent">
+                    <div style="text-align: center; color: #999; padding: 20px;">購物車是空的</div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <div class="form-group">
+                        <label>外送距離 (公里)</label>
+                        <input type="number" id="distance" placeholder="輸入距離" value="0" min="0" step="0.1">
+                        <div id="distanceError" class="error-message">抱歉，天下茶屋目前僅限 3 公里內配送。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>優惠碼 (Promo Code)</label>
+                        <input type="text" id="promo" placeholder="如: TENKA_80">
+                    </div>
+
+                    <div style="background: #f9f9f9; padding: 15px; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span>小計:</span><span id="cartSubtotal">$0</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--primary);"
+                            id="memberDiscountRow">
+                            <span>會員折扣:</span><span id="memberDiscount">-$0</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--danger);"
+                            id="promoDiscountRow">
+                            <span>活動折抵:</span><span id="promoDiscount">-$0</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.2rem; border-top: 1px solid #ddd; padding-top: 8px;">
+                            <span>總額:</span><span id="cartTotal">$0</span>
+                        </div>
+                    </div>
+
+                    <button class="action-btn" id="checkoutBtn" style="margin-top: 15px;" onclick="proceedToCheckout()"
+                        disabled>前往結帳</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="menuModal">
+        <div class="modal">
+            <button class="close-modal" onclick="closeModal('menuModal')">&times;</button>
+            <h2>Menu 查詢</h2>
+            <ul style="line-height: 1.8;">
+                <li><strong>天下紅茶</strong> - $40 (招牌推薦)</li>
+                <li><strong>天下綠茶</strong> - $35 (清爽解渴)</li>
+                <li><strong>特調奶茶</strong> - $55 (人氣首選)</li>
+                <li><strong>加料：</strong> 珍珠 +$10, 椰果 +$10</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="storeModal">
+        <div class="modal">
+            <button class="close-modal" onclick="closeModal('storeModal')">&times;</button>
+            <h2>全球門市列表</h2>
+            <div id="storeListContainer" style="font-size: 0.9rem; line-height: 1.6;">
+                <!-- Rendered by js/checkout.js -->
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="historyModal">
+        <div class="modal">
+            <button class="close-modal" onclick="closeModal('historyModal')">&times;</button>
+            <h2>訂單歷史紀錄 (最近10筆)</h2>
+            <div id="historyModalList">
+                <!-- Same as main page list but in modal -->
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal">
+            <button class="close-modal" onclick="closeModal('loginModal')">&times;</button>
+            <h2>會員登入</h2>
+            <p>登入會員享有專屬 95 折優惠！</p>
+            <div class="form-group">
+                <input type="text" id="loginPhone" placeholder="請輸入手機號碼 (如: 0912345678)">
+            </div>
+            <button class="action-btn" onclick="login()">登入</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="continueModal">
+        <div class="modal" style="text-align: center;">
+            <h2>已加入購物車！</h2>
+            <p>請問是否還要點其他飲料？</p>
+            <button class="action-btn" onclick="closeModal('continueModal')" style="margin-bottom: 10px;">返回</button>
+            <button class="secondary-btn"
+                onclick="closeModal('continueModal'); document.getElementById('checkoutBtn').scrollIntoView();">不點了，去結帳</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="checkoutFlowModal">
+        <div class="modal">
+            <button class="close-modal" onclick="closeModal('checkoutFlowModal')">&times;</button>
+            <h2>發票與載具設定</h2>
+            <div class="form-group">
+                <label>發票類型</label>
+                <select id="invoiceType" onchange="toggleInvoiceFields()">
+                    <option value="normal">一般紙本發票</option>
+                    <option value="carrier">手機條碼載具</option>
+                    <option value="vat">公司統編</option>
+                </select>
+            </div>
+            <div class="form-group" id="carrierGroup" style="display: none;">
+                <label>載具條碼 (如: /AB12345)</label>
+                <input type="text" id="carrierCode">
+            </div>
+            <div class="form-group" id="vatGroup" style="display: none;">
+                <label>統一編號</label>
+                <input type="text" id="vatCode">
+            </div>
+            <button class="action-btn" onclick="startPayment()">確認金額並付款 <span id="payTotalAmount"></span></button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="paymentModal">
+        <div class="modal" style="text-align: center;">
+            <h2>處理付款中...</h2>
+            <div id="paymentStatus">
+                <div class="loading-spinner"></div>
+                <p>正在與當地金流伺服器連線，請勿關閉視窗。</p>
+            </div>
+            <div id="paymentResult" style="display: none;">
+                <p id="paymentMsg"></p>
+                <button class="action-btn" id="retryPayBtn" style="display: none;"
+                    onclick="startPayment()">重新付款</button>
+                <button class="secondary-btn" id="changePayBtn" style="display: none;"
+                    onclick="closeModal('paymentModal')">更改付款方式</button>
+                <p id="timeoutMsg" style="color: var(--danger); font-size: 0.85rem; margin-top: 10px; display: none;">
+                    (系統已為您保留訂單 10 分鐘緩衝時間)</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- External Logic -->
+    <script src="js/checkout.js"></script>
+</body>
+
+</html>

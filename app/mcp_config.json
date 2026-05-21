@@ -1,0 +1,33 @@
+{
+    "mcpServers": {
+        "weather": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@mariox/weather-mcp-server"
+            ]
+        },
+        "line": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@line/line-bot-mcp-server"
+            ],
+            "env": {
+                "CHANNEL_ACCESS_TOKEN": "${env:LINE_CHANNEL_ACCESS_TOKEN}",
+                "DESTINATION_USER_ID": "${env:DESTINATION_USER_ID}"
+            }
+        },
+        "database": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@prama13/turso-mcp"
+            ],
+            "env": {
+                "TURSO_DATABASE_URL": "${env:TURSO_DB_URL}",
+                "TURSO_AUTH_TOKEN": "${env:TURSO_DB_TOKEN}"
+            }
+        }
+    }
+}
